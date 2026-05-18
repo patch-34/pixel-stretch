@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Stretch</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #f5f5f5;
+    color: #2a2a2a;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  header {
+    width: 100%;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .logo {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #ff4136;
+  }
+
+  .hint {
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 1px;
+  }
+
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 16px;
+    width: 100%;
+    max-width: 1200px;
+  }
+
+  .drop-zone {
+    width: 100%;
+    max-width: 700px;
+    aspect-ratio: 16/10;
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: #ff4136;
+    background: rgba(255, 65, 54, 0.05);
+  }
+
+  .drop-zone .icon { font-size: 48px; color: #bbb; line-height: 1; }
+  .drop-zone p { font-size: 12px; color: #888; letter-spacing: 1px; }
+  .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .canvas-wrap {
+    position: relative;
+    display: none;
+    line-height: 0;
+    box-shadow: 0 0 60px rgba(0,0,0,0.5);
+    touch-action: none; /* fix #2: prevent scroll while dragging */
+    cursor: col-resize;
+  }
+
+  .canvas-wrap canvas {
+    display: block;
+    max-width: 90vw;
+    max-height: 70vh;
+    width: auto;
+    height: auto;
+  }
+
+  /* grid canvas sits exactly on top */
+  #gridCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .slider-line {
+    position: absolute;
+    background: #ff4136;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 0 8px rgba(255,65,54,0.5);
+  }
+
+  /* vertical slider line (horizontal axis) */
+  .slider-line--h {
+    top: 0; bottom: 0;
+    width: 2px;
+    height: auto;
+  }
+  .slider-line--h::before, .slider-line--h::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+  }
+  .slider-line--h::before {
+    top: -8px;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 8px solid #ff4136;
+  }
+  .slider-line--h::after {
+    bottom: -8px;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid #ff4136;
+  }
+
+  /* horizontal slider line (vertical axis) */
+  .slider-line--v {
+    left: 0; right: 0;
+    height: 2px;
+    width: auto;
+  }
+  .slider-line--v::before, .slider-line--v::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0; height: 0;
+  }
+  .slider-line--v::before {
+    left: -8px;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 8px solid #ff4136;
+  }
+  .slider-line--v::after {
+    right: -8px;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 8px solid #ff4136;
+  }
+
+  /* generic control row */
+  .ctrl-row {
+    display: none;
+    gap: 8px;
+    align-items: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .ctrl-row span {
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 1px;
+  }
+
+  .ctrl-row button {
+    background: none;
+    border: 1px solid #ddd;
+    color: #666;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 6px 14px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+.ctrl-sep {
+    font-size: 11px;
+    color: #ccc;
+    padding: 0 4px;
+  }
+
+  .ctrl-row button.active {
+    border-color: #ff4136;
+    color: #ff4136;
+  }
+
+  /* toolbar */
+  .toolbar {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .toolbar-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .toolbar button {
+    background: none;
+    border: 1px solid #ddd;
+    color: #666;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 8px 20px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .toolbar button:hover { border-color: #ff4136; color: #ff4136; }
+
+  .toolbar .pos {
+    font-size: 11px;
+    color: #888;
+    min-width: 80px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* save preview */
+  .save-preview {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 700px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 16px;
+    background: #fafafa;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .save-preview-label { font-size: 11px; color: #888; letter-spacing: 1px; text-align: center; }
+  .save-preview-label span { color: #ff4136; }
+  .save-preview-img-wrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+  }
+
+  .save-preview img {
+    max-width: 100%;
+    max-height: 320px;
+    border-radius: 2px;
+    display: block;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: default; /* allow long-press save on iOS */
+    touch-action: none;
+  }
+
+  .save-preview-close {
+    font-size: 11px; color: #aaa; cursor: pointer;
+    letter-spacing: 1px; background: none; border: none;
+    font-family: inherit; text-transform: uppercase; padding: 4px 8px;
+    transition: color 0.2s;
+    user-select: none; -webkit-user-select: none;
+  }
+  .save-preview-close:hover { color: #888; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Pixel Stretch</div>
+  <div class="hint">drop image or click to load</div>
+</header>
+
+<div class="workspace">
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">⊞</div>
+    <p>DROP IMAGE HERE</p>
+    <input type="file" accept="image/*" id="fileInput">
+  </div>
+
+  <!-- Row 1: Axis + Stretch side -->
+  <div class="ctrl-row" id="axisRow">
+    <span>AXIS</span>
+    <button class="active" data-dir="horizontal">H</button>
+    <button data-dir="vertical">V</button>
+    <span class="ctrl-sep">|</span>
+    <span>STRETCH</span>
+    <button class="active" data-side="after">→</button>
+    <button data-side="before">←</button>
+  </div>
+
+  <!-- Row 2: Grid — S=small cell, M=medium, L=3 columns -->
+  <div class="ctrl-row" id="gridControls">
+    <span>GRID</span>
+    <button class="active" data-size="0">OFF</button>
+    <button data-size="2">4</button>
+    <button data-size="3">9</button>
+    <button data-size="5">25</button>
+  </div>
+
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="canvas"></canvas>
+    <canvas id="gridCanvas"></canvas>
+    <div class="slider-line" id="sliderLine"></div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-row">
+      <div class="pos" id="posLabel">50%</div>
+      <button id="btnSave">SAVE PNG</button>
+      <button id="btnReset">NEW IMAGE</button>
+    </div>
+  </div>
+
+  <div class="save-preview" id="savePreview">
+    <div class="save-preview-img-wrap">
+      <img id="previewImg" src="" alt="result">
+    </div>
+    <div class="save-preview-label">hold image → <span>save to photos</span></div>
+    <button class="save-preview-close" id="previewClose">✕ close</button>
+  </div>
+</div>
+
+<script>
+const dropZone     = document.getElementById('dropZone');
+const fileInput    = document.getElementById('fileInput');
+const canvasWrap   = document.getElementById('canvasWrap');
+const canvas       = document.getElementById('canvas');
+const ctx          = canvas.getContext('2d', { willReadFrequently: true });
+const gridCanvas   = document.getElementById('gridCanvas');
+const gctx         = gridCanvas.getContext('2d');
+const sliderLine   = document.getElementById('sliderLine');
+const toolbar      = document.getElementById('toolbar');
+const axisRow      = document.getElementById('axisRow');
+const gridControls = document.getElementById('gridControls');
+const posLabel     = document.getElementById('posLabel');
+const btnSave      = document.getElementById('btnSave');
+const btnReset     = document.getElementById('btnReset');
+const savePreview  = document.getElementById('savePreview');
+const previewImg   = document.getElementById('previewImg');
+const previewClose = document.getElementById('previewClose');
+
+const ua = navigator.userAgent;
+const needsPreview = /iP(ad|hone|od)/.test(ua)
+                  || /Telegram|Instagram|FBAV|FBAN|Line|Twitter|Snapchat/.test(ua);
+
+let img        = null;
+let sliderRatio = 0.5;
+let dragging   = false;
+let direction  = 'horizontal'; // 'horizontal' | 'vertical'
+let stretchSide = 'after';     // 'after' (right/bottom) | 'before' (left/top)
+let gridSize   = 0;
+
+// ── Axis + Side toggles (shared row) ─────────────────────────────────────────
+axisRow.querySelectorAll('button[data-dir]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    axisRow.querySelectorAll('button[data-dir]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    direction = btn.dataset.dir;
+    canvasWrap.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
+    updateSideLabels();
+    render();
+    renderGrid();
+  });
+});
+
+axisRow.querySelectorAll('button[data-side]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    axisRow.querySelectorAll('button[data-side]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    stretchSide = btn.dataset.side;
+    render();
+  });
+});
+
+function updateSideLabels() {
+  const [afterBtn, beforeBtn] = axisRow.querySelectorAll('button[data-side]');
+  if (direction === 'horizontal') {
+    afterBtn.textContent  = '→';
+    beforeBtn.textContent = '←';
+  } else {
+    afterBtn.textContent  = '↓';
+    beforeBtn.textContent = '↑';
+  }
+}
+
+// ── Grid toggle ──────────────────────────────────────────────────────────────
+// gridSize = number of columns (0 = off)
+gridControls.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    gridControls.querySelector('.active').classList.remove('active');
+    btn.classList.add('active');
+    gridSize = parseInt(btn.dataset.size); // 0, 2, 3, or 5
+    renderGrid();
+  });
+});
+
+// ── File handling ─────────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const i = new Image();
+    i.onload = () => { img = i; sliderRatio = 0.5; initCanvas(); };
+    i.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function initCanvas() {
+  canvas.width  = img.width;
+  canvas.height = img.height;
+
+  const maxW  = window.innerWidth  * 0.9;
+  const maxH  = window.innerHeight * 0.70;
+  const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+  const dispW = Math.round(img.width  * scale);
+  const dispH = Math.round(img.height * scale);
+
+  canvas.style.width  = dispW + 'px';
+  canvas.style.height = dispH + 'px';
+
+  // fix #3: gridCanvas must match display size exactly
+  gridCanvas.width  = dispW;
+  gridCanvas.height = dispH;
+  gridCanvas.style.width  = dispW + 'px';
+  gridCanvas.style.height = dispH + 'px';
+
+  dropZone.style.display      = 'none';
+  canvasWrap.style.display    = 'block';
+  toolbar.style.display       = 'flex';
+  axisRow.style.display       = 'flex';
+  gridControls.style.display  = 'flex';
+  savePreview.style.display   = 'none';
+
+  updateSideLabels();
+  render();
+  renderGrid();
+}
+
+// ── Render image + stretch ────────────────────────────────────────────────────
+function render() {
+  if (!img) return;
+  ctx.drawImage(img, 0, 0);
+
+  const w = canvas.width;
+  const h = canvas.height;
+
+  if (direction === 'horizontal') {
+    const splitX = Math.round(sliderRatio * w);
+
+    if (stretchSide === 'after') {
+      if (splitX >= w) return updateUI();
+      const col = ctx.getImageData(splitX, 0, 1, h).data;
+      for (let y = 0; y < h; y++) {
+        const i = y * 4;
+        ctx.fillStyle = `rgba(${col[i]},${col[i+1]},${col[i+2]},${col[i+3]/255})`;
+        ctx.fillRect(splitX, y, w - splitX, 1);
+      }
+    } else {
+      if (splitX <= 0) return updateUI();
+      const col = ctx.getImageData(splitX, 0, 1, h).data;
+      for (let y = 0; y < h; y++) {
+        const i = y * 4;
+        ctx.fillStyle = `rgba(${col[i]},${col[i+1]},${col[i+2]},${col[i+3]/255})`;
+        ctx.fillRect(0, y, splitX, 1);
+      }
+    }
+
+    const dispW = parseFloat(canvas.style.width);
+    sliderLine.className = 'slider-line slider-line--h';
+    sliderLine.style.left   = (sliderRatio * dispW) + 'px';
+    sliderLine.style.top    = '';
+    sliderLine.style.bottom = '';
+    sliderLine.style.right  = '';
+    sliderLine.style.width  = '';
+    sliderLine.style.height = '';
+
+  } else {
+    const splitY = Math.round(sliderRatio * h);
+
+    if (stretchSide === 'after') {
+      if (splitY >= h) return updateUI();
+      const row = ctx.getImageData(0, splitY, w, 1).data;
+      for (let x = 0; x < w; x++) {
+        const i = x * 4;
+        ctx.fillStyle = `rgba(${row[i]},${row[i+1]},${row[i+2]},${row[i+3]/255})`;
+        ctx.fillRect(x, splitY, 1, h - splitY);
+      }
+    } else {
+      if (splitY <= 0) return updateUI();
+      const row = ctx.getImageData(0, splitY, w, 1).data;
+      for (let x = 0; x < w; x++) {
+        const i = x * 4;
+        ctx.fillStyle = `rgba(${row[i]},${row[i+1]},${row[i+2]},${row[i+3]/255})`;
+        ctx.fillRect(x, 0, 1, splitY);
+      }
+    }
+
+    const dispH = parseFloat(canvas.style.height);
+    sliderLine.className = 'slider-line slider-line--v';
+    sliderLine.style.top    = (sliderRatio * dispH) + 'px';
+    sliderLine.style.left   = '';
+    sliderLine.style.right  = '';
+    sliderLine.style.bottom = '';
+    sliderLine.style.width  = '';
+    sliderLine.style.height = '';
+  }
+
+  updateUI();
+}
+
+// ── Grid render ───────────────────────────────────────────────────────────────
+// gridSize = columns (= rows), grid calculated from image pixel dimensions
+function renderGrid() {
+  const dw = gridCanvas.width;   // display pixels
+  const dh = gridCanvas.height;
+  gctx.clearRect(0, 0, dw, dh);
+  if (!gridSize || !img) return;
+
+  const cols = gridSize;
+  const rows = gridSize;
+
+  // scale: image px -> display px
+  const scaleX = dw / canvas.width;
+  const scaleY = dh / canvas.height;
+
+  // cell size in image pixels (integer, so grid divides image evenly)
+  const cellImgW = canvas.width  / cols;
+  const cellImgH = canvas.height / rows;
+
+  gctx.strokeStyle = 'rgba(100,100,100,0.35)';
+  gctx.lineWidth   = 1;
+  gctx.beginPath();
+
+  for (let c = 1; c < cols; c++) {
+    const x = Math.round(c * cellImgW * scaleX) + 0.5;
+    gctx.moveTo(x, 0); gctx.lineTo(x, dh);
+  }
+  for (let r = 1; r < rows; r++) {
+    const y = Math.round(r * cellImgH * scaleY) + 0.5;
+    gctx.moveTo(0, y); gctx.lineTo(dw, y);
+  }
+  gctx.stroke();
+}
+
+function updateUI() {
+  posLabel.textContent = Math.round(sliderRatio * 100) + '%';
+}
+
+// ── Slider drag — fix #2: touch-action:none on wrap + prevent default ─────────
+canvasWrap.addEventListener('pointerdown', e => {
+  dragging = true;
+  canvasWrap.setPointerCapture(e.pointerId);
+  updateSlider(e);
+}, { passive: false });
+
+canvasWrap.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  e.preventDefault();
+  updateSlider(e);
+}, { passive: false });
+
+canvasWrap.addEventListener('pointerup',    () => dragging = false);
+canvasWrap.addEventListener('pointercancel',() => dragging = false);
+
+function updateSlider(e) {
+  const rect = canvas.getBoundingClientRect();
+  if (direction === 'horizontal') {
+    sliderRatio = Math.max(0.01, Math.min(0.99, (e.clientX - rect.left) / rect.width));
+  } else {
+    sliderRatio = Math.max(0.01, Math.min(0.99, (e.clientY - rect.top) / rect.height));
+  }
+  render();
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+btnSave.addEventListener('click', () => {
+  const dataURL = canvas.toDataURL('image/png');
+  if (needsPreview) {
+    previewImg.src = dataURL;
+    savePreview.style.display = 'flex';
+    savePreview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    const link = document.createElement('a');
+    link.download = 'pixel-stretch.png';
+    link.href = dataURL;
+    link.click();
+  }
+});
+
+previewClose.addEventListener('click', () => {
+  savePreview.style.display = 'none';
+  previewImg.src = '';
+});
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+btnReset.addEventListener('click', () => {
+  img = null;
+  canvasWrap.style.display    = 'none';
+  toolbar.style.display       = 'none';
+  axisRow.style.display       = 'none';
+  gridControls.style.display  = 'none';
+  savePreview.style.display   = 'none';
+  previewImg.src              = '';
+  dropZone.style.display      = 'flex';
+  fileInput.value             = '';
+  // reset state
+  direction   = 'horizontal';
+  stretchSide = 'after';
+  gridSize    = 0;
+  canvasWrap.style.cursor = 'col-resize';
+  axisRow.querySelectorAll('button[data-dir]').forEach(b => b.classList.remove('active'));
+  axisRow.querySelector('[data-dir="horizontal"]').classList.add('active');
+  axisRow.querySelectorAll('button[data-side]').forEach(b => b.classList.remove('active'));
+  axisRow.querySelector('[data-side="after"]').classList.add('active');
+  gridControls.querySelector('.active').classList.remove('active');
+  gridControls.querySelector('[data-size="0"]').classList.add('active');
+});
+</script>
+
+</body>
+</html>
