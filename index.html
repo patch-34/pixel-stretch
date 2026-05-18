@@ -165,45 +165,67 @@
     border-left: 8px solid #ff4136;
   }
 
-  /* generic control row */
-  .ctrl-row {
+  /* control groups container */
+  .ctrl-groups {
     display: none;
-    gap: 8px;
-    align-items: center;
+    gap: 32px;
+    align-items: flex-start;
+    flex-wrap: wrap;
     user-select: none;
     -webkit-user-select: none;
   }
 
-  .ctrl-row span {
-    font-size: 11px;
-    color: #888;
-    letter-spacing: 1px;
+  /* individual group (Axis, Stretch, Grid) */
+  .ctrl-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .ctrl-row button {
-    background: none;
+  .ctrl-label {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+
+  .ctrl-buttons {
+    display: flex;
+    gap: 1px;
+  }
+
+  .ctrl-buttons button {
+    background: white;
     border: 1px solid #ddd;
     color: #666;
     font-family: inherit;
     font-size: 11px;
-    padding: 6px 14px;
+    padding: 6px 12px;
     cursor: pointer;
-    border-radius: 2px;
-    transition: all 0.2s;
+    transition: all 0.15s;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
 
-.ctrl-sep {
-    font-size: 11px;
-    color: #ccc;
-    padding: 0 4px;
+  .ctrl-buttons button:first-child {
+    border-radius: 2px 0 0 2px;
   }
 
-  .ctrl-row button.active {
+  .ctrl-buttons button:last-child {
+    border-radius: 0 2px 2px 0;
+  }
+
+  .ctrl-buttons button:hover {
     border-color: #ff4136;
     color: #ff4136;
+  }
+
+  .ctrl-buttons button.active {
+    background: #ff4136;
+    border-color: #ff4136;
+    color: white;
   }
 
   /* toolbar */
@@ -313,24 +335,37 @@
     <input type="file" accept="image/*" id="fileInput">
   </div>
 
-  <!-- Row 1: Axis + Stretch side -->
-  <div class="ctrl-row" id="axisRow">
-    <span>AXIS</span>
-    <button class="active" data-dir="horizontal">H</button>
-    <button data-dir="vertical">V</button>
-    <span class="ctrl-sep">|</span>
-    <span>STRETCH</span>
-    <button class="active" data-side="after">→</button>
-    <button data-side="before">←</button>
-  </div>
+  <!-- Control Groups: Axis, Stretch, Grid -->
+  <div class="ctrl-groups" id="ctrlGroups">
+    <!-- Axis Group -->
+    <div class="ctrl-group">
+      <div class="ctrl-label">Axis</div>
+      <div class="ctrl-buttons" id="axisButtons">
+        <button class="active" data-dir="horizontal">H</button>
+        <button data-dir="vertical">V</button>
+        <button data-dir="pipe">|</button>
+      </div>
+    </div>
 
-  <!-- Row 2: Grid — S=small cell, M=medium, L=3 columns -->
-  <div class="ctrl-row" id="gridControls">
-    <span>GRID</span>
-    <button class="active" data-size="0">OFF</button>
-    <button data-size="2">4</button>
-    <button data-size="3">9</button>
-    <button data-size="5">25</button>
+    <!-- Stretch Group -->
+    <div class="ctrl-group">
+      <div class="ctrl-label">Stretch</div>
+      <div class="ctrl-buttons" id="stretchButtons">
+        <button class="active" data-side="after">→</button>
+        <button data-side="before">←</button>
+      </div>
+    </div>
+
+    <!-- Grid Group -->
+    <div class="ctrl-group">
+      <div class="ctrl-label">Grid</div>
+      <div class="ctrl-buttons" id="gridButtons">
+        <button class="active" data-size="0">OFF</button>
+        <button data-size="2">4</button>
+        <button data-size="3">9</button>
+        <button data-size="5">25</button>
+      </div>
+    </div>
   </div>
 
   <div class="canvas-wrap" id="canvasWrap">
@@ -366,8 +401,10 @@ const gridCanvas   = document.getElementById('gridCanvas');
 const gctx         = gridCanvas.getContext('2d');
 const sliderLine   = document.getElementById('sliderLine');
 const toolbar      = document.getElementById('toolbar');
-const axisRow      = document.getElementById('axisRow');
-const gridControls = document.getElementById('gridControls');
+const ctrlGroups   = document.getElementById('ctrlGroups');
+const axisButtons  = document.getElementById('axisButtons');
+const stretchButtons = document.getElementById('stretchButtons');
+const gridButtons  = document.getElementById('gridButtons');
 const posLabel     = document.getElementById('posLabel');
 const btnSave      = document.getElementById('btnSave');
 const btnReset     = document.getElementById('btnReset');
@@ -386,10 +423,10 @@ let direction  = 'horizontal'; // 'horizontal' | 'vertical'
 let stretchSide = 'after';     // 'after' (right/bottom) | 'before' (left/top)
 let gridSize   = 0;
 
-// ── Axis + Side toggles (shared row) ─────────────────────────────────────────
-axisRow.querySelectorAll('button[data-dir]').forEach(btn => {
+// ── Axis buttons ─────────────────────────────────────────────────────────────
+axisButtons.querySelectorAll('button[data-dir]').forEach(btn => {
   btn.addEventListener('click', () => {
-    axisRow.querySelectorAll('button[data-dir]').forEach(b => b.classList.remove('active'));
+    axisButtons.querySelectorAll('button[data-dir]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     direction = btn.dataset.dir;
     canvasWrap.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
@@ -399,17 +436,28 @@ axisRow.querySelectorAll('button[data-dir]').forEach(btn => {
   });
 });
 
-axisRow.querySelectorAll('button[data-side]').forEach(btn => {
+// ── Stretch buttons ──────────────────────────────────────────────────────────
+stretchButtons.querySelectorAll('button[data-side]').forEach(btn => {
   btn.addEventListener('click', () => {
-    axisRow.querySelectorAll('button[data-side]').forEach(b => b.classList.remove('active'));
+    stretchButtons.querySelectorAll('button[data-side]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     stretchSide = btn.dataset.side;
     render();
   });
 });
 
+// ── Grid buttons ─────────────────────────────────────────────────────────────
+gridButtons.querySelectorAll('button[data-size]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    gridButtons.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    gridSize = parseInt(btn.dataset.size); // 0, 2, 3, or 5
+    renderGrid();
+  });
+});
+
 function updateSideLabels() {
-  const [afterBtn, beforeBtn] = axisRow.querySelectorAll('button[data-side]');
+  const [afterBtn, beforeBtn] = stretchButtons.querySelectorAll('button[data-side]');
   if (direction === 'horizontal') {
     afterBtn.textContent  = '→';
     beforeBtn.textContent = '←';
@@ -418,17 +466,6 @@ function updateSideLabels() {
     beforeBtn.textContent = '↑';
   }
 }
-
-// ── Grid toggle ──────────────────────────────────────────────────────────────
-// gridSize = number of columns (0 = off)
-gridControls.querySelectorAll('button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    gridControls.querySelector('.active').classList.remove('active');
-    btn.classList.add('active');
-    gridSize = parseInt(btn.dataset.size); // 0, 2, 3, or 5
-    renderGrid();
-  });
-});
 
 // ── File handling ─────────────────────────────────────────────────────────────
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -475,8 +512,7 @@ function initCanvas() {
   dropZone.style.display      = 'none';
   canvasWrap.style.display    = 'block';
   toolbar.style.display       = 'flex';
-  axisRow.style.display       = 'flex';
-  gridControls.style.display  = 'flex';
+  ctrlGroups.style.display    = 'flex';
   savePreview.style.display   = 'none';
 
   updateSideLabels();
@@ -640,28 +676,31 @@ previewClose.addEventListener('click', () => {
   previewImg.src = '';
 });
 
-// ── Reset ─────────────────────────────────────────────────────────────────────
+// ── Reset (New Image) ─────────────────────────────────────────────────────────
 btnReset.addEventListener('click', () => {
+  // Reset state
   img = null;
   canvasWrap.style.display    = 'none';
   toolbar.style.display       = 'none';
-  axisRow.style.display       = 'none';
-  gridControls.style.display  = 'none';
+  ctrlGroups.style.display    = 'none';
   savePreview.style.display   = 'none';
   previewImg.src              = '';
   dropZone.style.display      = 'flex';
   fileInput.value             = '';
-  // reset state
+  // reset controls
   direction   = 'horizontal';
   stretchSide = 'after';
   gridSize    = 0;
   canvasWrap.style.cursor = 'col-resize';
-  axisRow.querySelectorAll('button[data-dir]').forEach(b => b.classList.remove('active'));
-  axisRow.querySelector('[data-dir="horizontal"]').classList.add('active');
-  axisRow.querySelectorAll('button[data-side]').forEach(b => b.classList.remove('active'));
-  axisRow.querySelector('[data-side="after"]').classList.add('active');
-  gridControls.querySelector('.active').classList.remove('active');
-  gridControls.querySelector('[data-size="0"]').classList.add('active');
+  axisButtons.querySelectorAll('button[data-dir]').forEach(b => b.classList.remove('active'));
+  axisButtons.querySelector('[data-dir="horizontal"]').classList.add('active');
+  stretchButtons.querySelectorAll('button[data-side]').forEach(b => b.classList.remove('active'));
+  stretchButtons.querySelector('[data-side="after"]').classList.add('active');
+  gridButtons.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  gridButtons.querySelector('[data-size="0"]').classList.add('active');
+  
+  // Open file browser immediately
+  fileInput.click();
 });
 </script>
 
