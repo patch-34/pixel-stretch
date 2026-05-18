@@ -4,6 +4,8 @@ Stretch image edges to create seamless tiles, fill backgrounds, or experiment wi
 
 **Open it:** just download `pixel-stretch.html` and open in your browser. No installation needed.
 
+![Pixel Stretch Interface](screenshot.png)
+
 ## What it does
 
 Load an image → drag the slider to stretch one edge → download PNG.
